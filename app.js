@@ -3,11 +3,15 @@ const express = require("express");
 const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
 
 const app = express();
 
-console.log(process.env.API_KEY);
+console.log("weak password hash: " + md5("1234"));
+console.log(
+  "strong password hash: " +
+    md5("asdfasdfdsafqghbq6`5456426$%$sdfsdfHJKHSJFHDSF78324")
+);
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -18,11 +22,6 @@ mongoose.connect("mongodb://127.0.0.1:27017/secretsUserDB");
 const userSchema = mongoose.Schema({
   email: String,
   password: String,
-});
-
-userSchema.plugin(encrypt, {
-  secret: process.env.SECRET,
-  encryptedFields: ["password"],
 });
 
 const User = mongoose.model("User", userSchema);
@@ -43,7 +42,7 @@ app.post("/register", async (q, s) => {
   try {
     const newUser = new User({
       email: q.body.username,
-      password: q.body.password,
+      password: md5(q.body.password),
     });
     const result = await newUser.save();
     console.log("register completed", result);
@@ -55,7 +54,7 @@ app.post("/register", async (q, s) => {
 
 app.post("/login", async (q, s) => {
   const userName = q.body.username;
-  const passwordInput = q.body.password;
+  const passwordInput = md5(q.body.password);
 
   const foundUser = await User.findOne({ email: userName });
   if (foundUser) {
