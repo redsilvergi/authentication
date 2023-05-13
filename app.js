@@ -3,15 +3,11 @@ const express = require("express");
 const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const md5 = require("md5");
+const bcrypt = require("bcrypt");
 
 const app = express();
 
-console.log("weak password hash: " + md5("1234"));
-console.log(
-  "strong password hash: " +
-    md5("asdfasdfdsafqghbq6`5456426$%$sdfsdfHJKHSJFHDSF78324")
-);
+console.log(typeof parseInt(process.env.SALTROUND));
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -40,9 +36,14 @@ app.get("/login", (q, s) => {
 
 app.post("/register", async (q, s) => {
   try {
+    const hashValue = await bcrypt.hash(
+      q.body.password,
+      parseInt(process.env.SALTROUND)
+    );
+
     const newUser = new User({
       email: q.body.username,
-      password: md5(q.body.password),
+      password: hashValue,
     });
     const result = await newUser.save();
     console.log("register completed", result);
@@ -54,11 +55,14 @@ app.post("/register", async (q, s) => {
 
 app.post("/login", async (q, s) => {
   const userName = q.body.username;
-  const passwordInput = md5(q.body.password);
 
   const foundUser = await User.findOne({ email: userName });
   if (foundUser) {
-    if (foundUser.password === passwordInput) {
+    const resultCompare = await bcrypt.compare(
+      q.body.password,
+      foundUser.password
+    );
+    if (resultCompare === true) {
       s.render("secrets");
     } else {
       console.log("login failed");
