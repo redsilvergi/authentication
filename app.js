@@ -38,6 +38,7 @@ const userSchema = mongoose.Schema({
   googleId: String,
   googleDisplayName: String,
   googleEmail: String,
+  secret: String,
 });
 
 //passport setup 3
@@ -88,8 +89,8 @@ passport.use(
 );
 
 app.get("/", (req, res) => {
-  console.log(req.user);
-  res.render("home");
+  console.log(`home log: ${req.user}`);
+  res.render("home", { user: req.user });
 });
 
 app.get(
@@ -105,22 +106,82 @@ app.get(
   }
 );
 
-app.get("/register", (req, res) => {
-  res.render("register");
-});
+app
+  .route("/register")
+  .get((req, res) => {
+    res.render("register");
+  })
+  .post((req, res) => {
+    try {
+      User.register(
+        new User({ username: req.body.username }),
+        req.body.password,
+        () => {
+          //login right after you register
+          passport.authenticate("local", {
+            failureRedirect: "/register",
+          })(req, res, () => {
+            res.redirect("/secrets");
+          });
+        }
+      );
+    } catch (e) {
+      console.log(e);
+      res.redirect("register");
+    }
+  });
 
-app.get("/login", (req, res) => {
-  res.render("login");
-});
+app
+  .route("/login")
+  .get((req, res) => {
+    res.render("login");
+  })
+  .post(
+    passport.authenticate("local", {
+      failureRedirect: "/login",
+    }),
+    (req, res) => {
+      res.redirect("/secrets");
+    }
+  );
 
-app.get("/secrets", (req, res) => {
-  if (req.isAuthenticated()) {
-    console.log(`secrets log: ${req.user}`);
-    res.render("secrets", { user: req.user });
-  } else {
-    res.redirect("/login");
+app.get("/secrets", async (req, res) => {
+  try {
+    const foundUsers = await User.find({ secret: { $ne: null } });
+    if (foundUsers) {
+      console.log(req.user);
+      res.render("secrets", { user: req.user, usersWithSecrets: foundUsers });
+    }
+  } catch (e) {
+    console.log(e);
   }
 });
+
+app
+  .route("/submit")
+  .get((req, res) => {
+    if (req.isAuthenticated()) {
+      res.render("submit");
+    } else {
+      res.redirect("/login");
+    }
+  })
+  .post(async (req, res) => {
+    try {
+      console.log("entering patch");
+      const submittedSecret = req.body.secret;
+      console.log(`submittedSecret: ${submittedSecret}`);
+      const foundUser = await User.findById(req.user.id);
+      if (foundUser) {
+        console.log(`foundUser: ${foundUser}`);
+        foundUser.secret = submittedSecret;
+        foundUser.save();
+        res.redirect("/secrets");
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  });
 
 app.get("/logout", async (req, res) => {
   try {
@@ -131,34 +192,6 @@ app.get("/logout", async (req, res) => {
     console.log(e);
   }
 });
-
-app.post("/register", async (req, res) => {
-  try {
-    await User.register(
-      new User({ username: req.body.username }),
-      req.body.password,
-      () => {
-        //login right after you register
-        passport.authenticate("local")(req, res, () => {
-          res.redirect("/secrets");
-        });
-      }
-    );
-  } catch (e) {
-    console.log(e);
-    res.redirect("register");
-  }
-});
-
-app.post(
-  "/login",
-  passport.authenticate("local", {
-    failureRedirect: "/login",
-  }),
-  (req, res) => {
-    res.redirect("/secrets");
-  }
-);
 
 app.listen(process.env.PORT || 3000, () => {
   console.log("server started");
